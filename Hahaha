@@ -1,0 +1,291 @@
+-- Tool GONER COMPLETA COM ESTADOS SINCRONIZADOS E TEXTBOX DE VELOCIDADE (1x1x1 EDITION)
+local Players = game:GetService("Players")
+local Debris = game:GetService("Debris")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+-- Cria Tool
+local tool = Instance.new("Tool")
+tool.Name = "SPEED 1x1x1"
+tool.RequiresHandle = false
+tool.Parent = player.Backpack
+
+-- Estado global do Goner
+local isSpeedster = false
+local speedActive = false
+local effectsEnabled = true
+local speedMultiplier = 34
+local electricTrails = {}
+local lightningParticles
+local rumble
+local zap
+
+-- Funções auxiliares
+local function destroyElectricTrails()
+    for _, obj in pairs(electricTrails) do
+        if obj and obj.Parent then obj:Destroy() end
+    end
+    electricTrails = {}
+end
+
+local function createLightningEffect(humanoidRootPart)
+    local effect = Instance.new("ParticleEmitter")
+    effect.Texture = "rbxassetid://255449862"
+    effect.Lifetime = NumberRange.new(0.2,0.5)
+    effect.Rate = 19
+    effect.Speed = NumberRange.new(10,20)
+    effect.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0,150,0)),   -- verde normal
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,255,0)), -- verde claro
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(0,100,0))    -- verde escuro
+    })
+    effect.Parent = humanoidRootPart
+    effect.Enabled = false
+    return effect
+end
+
+local function lightningTrail(humanoidRootPart)
+    if not effectsEnabled or not speedActive then return end
+    local a0 = Instance.new("Attachment", humanoidRootPart)
+    local a1 = Instance.new("Attachment", humanoidRootPart)
+    a0.Position = Vector3.new(0,2,0)
+    a1.Position = Vector3.new(0,-2,0)
+    local trail = Instance.new("Trail", humanoidRootPart)
+    trail.Attachment0 = a0
+    trail.Attachment1 = a1
+    trail.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(0,150,0)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,255,0)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(0,100,0))
+    })
+    trail.Lifetime = 0.4
+    trail.WidthScale = NumberSequence.new({NumberSequenceKeypoint.new(0,1.5), NumberSequenceKeypoint.new(1,0)})
+    trail.Transparency = NumberSequence.new(0.1)
+    trail.LightEmission = 1
+    Debris:AddItem(trail,1.2)
+    Debris:AddItem(a0,1.2)
+    Debris:AddItem(a1,1.2)
+end
+
+local function createElectricTrails(character)
+    if not effectsEnabled then return end
+    local parts = {
+        character:FindFirstChild("Head"),
+        character:FindFirstChild("Left Arm") or character:FindFirstChild("LeftUpperArm"),
+        character:FindFirstChild("Right Arm") or character:FindFirstChild("RightUpperArm"),
+        character:FindFirstChild("Left Leg") or character:FindFirstChild("LeftUpperLeg"),
+        character:FindFirstChild("Right Leg") or character:FindFirstChild("RightUpperLeg"),
+        character:FindFirstChild("HumanoidRootPart")
+    }
+    for _, part in ipairs(parts) do
+        if part then
+            local att0 = Instance.new("Attachment", part)
+            local att1 = Instance.new("Attachment", part)
+            att0.Position = Vector3.new(0,0.5,0)
+            att1.Position = att0.Position + Vector3.new(0,-0.3,0)
+            local trail = Instance.new("Trail", part)
+            trail.Attachment0 = att0
+            trail.Attachment1 = att1
+            trail.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(0,150,0)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,255,0)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(0,100,0))
+            })
+            trail.Lifetime = 0.3
+            trail.Transparency = NumberSequence.new(0.2)
+            trail.WidthScale = NumberSequence.new(0.4)
+            trail.LightEmission = 1
+            table.insert(electricTrails, trail)
+            table.insert(electricTrails, att0)
+            table.insert(electricTrails, att1)
+        end
+    end
+end
+
+-- Funções toggle
+local function toggleSpeedster(character, humanoidRootPart, cam)
+    isSpeedster = not isSpeedster
+    if isSpeedster then
+        rumble:Play()
+        TweenService:Create(cam, TweenInfo.new(0.3), {FieldOfView=90}):Play()
+        if effectsEnabled then createElectricTrails(character) end
+        if speedActive then lightningParticles.Enabled = true end
+    else
+        rumble:Stop()
+        TweenService:Create(cam, TweenInfo.new(0.3), {FieldOfView=70}):Play()
+        destroyElectricTrails()
+        lightningParticles.Enabled = false
+    end
+end
+
+local function toggleSpeed()
+    speedActive = not speedActive
+    if lightningParticles then
+        lightningParticles.Enabled = (speedActive and isSpeedster)
+    end
+end
+
+local function toggleEffects(character)
+    effectsEnabled = not effectsEnabled
+    if effectsEnabled then
+        createElectricTrails(character)
+    else
+        destroyElectricTrails()
+        if lightningParticles then lightningParticles.Enabled = false end
+    end
+end
+
+-- RenderStepped
+RunService.RenderStepped:Connect(function()
+    local character = player.Character
+    if not character then return end
+    local humanoid = character:FindFirstChild("Humanoid")
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not humanoidRootPart then return end
+    if speedActive and isSpeedster then
+        local moveDir = humanoid.MoveDirection
+        if moveDir.Magnitude > 0 then
+            humanoidRootPart.CFrame = humanoidRootPart.CFrame + (moveDir * speedMultiplier)
+            if effectsEnabled and math.random() < 0.3 then
+                lightningTrail(humanoidRootPart)
+            end
+            if zap and not zap.IsPlaying and math.random() < 0.1 then
+                zap:Play()
+            end
+        end
+    end
+end)
+
+-- Função para criar GUI
+local function createGonerGUI()
+    if game.CoreGui:FindFirstChild("GonerGUI") then return end
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
+    local humanoid = character:WaitForChild("Humanoid")
+    local cam = workspace.CurrentCamera
+
+    rumble = Instance.new("Sound", humanoidRootPart)
+    rumble.SoundId = "rbxassetid://1837635124"
+    rumble.Looped = true
+    rumble.Volume = 0.8
+
+    zap = Instance.new("Sound", humanoidRootPart)
+    zap.SoundId = "rbxassetid://138218317"
+    zap.Volume = 0.6
+
+    lightningParticles = createLightningEffect(humanoidRootPart)
+
+    local gui = Instance.new("ScreenGui", game.CoreGui)
+    gui.Name = "GonerGUI"
+    gui.ResetOnSpawn = false
+
+    local mainFrame = Instance.new("Frame", gui)
+    mainFrame.Size = UDim2.new(0,280,0,200)
+    mainFrame.Position = UDim2.new(0,20,1,-220)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    mainFrame.BorderSizePixel = 2
+    mainFrame.BorderColor3 = Color3.fromRGB(0,255,0)
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+
+    local title = Instance.new("TextLabel", mainFrame)
+    title.Size = UDim2.new(1,-30,0,28)
+    title.BackgroundColor3 = Color3.fromRGB(0,150,0)
+    title.Text = "1x1x1"
+    title.TextColor3 = Color3.fromRGB(0,0,0)
+    title.Font = Enum.Font.SourceSansBold
+    title.TextScaled = true
+    title.BorderSizePixel = 0
+
+    local closeBtn = Instance.new("TextButton", mainFrame)
+    closeBtn.Size = UDim2.new(0,28,0,28)
+    closeBtn.Position = UDim2.new(1,-28,0,0)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(0,150,0)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(0,0,0)
+    closeBtn.TextScaled = true
+    closeBtn.MouseButton1Click:Connect(function()
+        gui:Destroy()
+    end)
+
+    -- Botão 1x1x1
+    local flashBtn = Instance.new("TextButton", mainFrame)
+    flashBtn.Size = UDim2.new(0.95,0,0,32)
+    flashBtn.Position = UDim2.new(0.025,0,0,40)
+    flashBtn.BackgroundColor3 = isSpeedster and Color3.fromRGB(0,255,0) or Color3.fromRGB(50,50,50)
+    flashBtn.Text = isSpeedster and "1x1x1: ON" or "1x1x1: OFF"
+    flashBtn.TextColor3 = Color3.fromRGB(0,0,0)
+    flashBtn.Font = Enum.Font.SourceSansBold
+    flashBtn.TextSize = 14
+    flashBtn.MouseButton1Click:Connect(function()
+        toggleSpeedster(character, humanoidRootPart, cam)
+        flashBtn.Text = isSpeedster and "1x1x1: ON" or "1x1x1: OFF"
+        flashBtn.BackgroundColor3 = isSpeedster and Color3.fromRGB(0,255,0) or Color3.fromRGB(50,50,50)
+    end)
+
+    -- Botão Velocidade
+    local speedBtn = Instance.new("TextButton", mainFrame)
+    speedBtn.Size = UDim2.new(0.6,0,0,28)
+    speedBtn.Position = UDim2.new(0.025,0,0,80)
+    speedBtn.BackgroundColor3 = speedActive and Color3.fromRGB(0,255,0) or Color3.fromRGB(50,50,50)
+    speedBtn.Text = speedActive and "Velocidade: ON" or "Velocidade: OFF"
+    speedBtn.TextColor3 = Color3.fromRGB(0,0,0)
+    speedBtn.TextSize = 12
+    speedBtn.Font = Enum.Font.SourceSans
+    speedBtn.MouseButton1Click:Connect(function()
+        toggleSpeed()
+        speedBtn.Text = speedActive and "Velocidade: ON" or "Velocidade: OFF"
+        speedBtn.BackgroundColor3 = speedActive and Color3.fromRGB(0,255,0) or Color3.fromRGB(50,50,50)
+    end)
+
+    -- TextBox de Velocidade
+    local speedInput = Instance.new("TextBox", mainFrame)
+    speedInput.Size = UDim2.new(0.35,0,0,28)
+    speedInput.Position = UDim2.new(0.63,0,0,80)
+    speedInput.BackgroundColor3 = Color3.fromRGB(20,20,20)
+    speedInput.Text = tostring(speedMultiplier)
+    speedInput.TextSize = 12
+    speedInput.TextColor3 = Color3.fromRGB(0,255,0)
+    speedInput.Font = Enum.Font.SourceSans
+    speedInput.ClearTextOnFocus = false
+    speedInput.FocusLost:Connect(function()
+        local newSpeed = tonumber(speedInput.Text)
+        if newSpeed then
+            speedMultiplier = newSpeed
+            speedInput.Text = tostring(newSpeed)
+        else
+            speedInput.Text = tostring(speedMultiplier)
+        end
+    end)
+
+    -- Botão Efeitos
+    local effectBtn = Instance.new("TextButton", mainFrame)
+    effectBtn.Size = UDim2.new(0.95,0,0,28)
+    effectBtn.Position = UDim2.new(0.025,0,0,120)
+    effectBtn.BackgroundColor3 = effectsEnabled and Color3.fromRGB(0,255,0) or Color3.fromRGB(50,50,50)
+    effectBtn.Text = effectsEnabled and "Efeitos: ON" or "Efeitos: OFF"
+    effectBtn.TextSize = 12
+    effectBtn.Font = Enum.Font.SourceSans
+    effectBtn.TextColor3 = Color3.fromRGB(0,0,0)
+    effectBtn.MouseButton1Click:Connect(function()
+        toggleEffects(character)
+        effectBtn.Text = effectsEnabled and "Efeitos: ON" or "Efeitos: OFF"
+        effectBtn.BackgroundColor3 = effectsEnabled and Color3.fromRGB(0,255,0) or Color3.fromRGB(50,50,50)
+    end)
+end
+
+-- Abrir/fechar GUI ao clicar na Tool
+local guiOpen = false
+tool.Activated:Connect(function()
+    if guiOpen then
+        if game.CoreGui:FindFirstChild("GonerGUI") then
+            game.CoreGui.GonerGUI:Destroy()
+        end
+        guiOpen = false
+    else
+        createGonerGUI()
+        guiOpen = true
+    end
+end)
